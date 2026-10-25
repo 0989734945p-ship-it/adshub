@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
+import { readFile } from "fs/promises";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { publicPlatformScript } from "./publicConfig";
@@ -17,6 +19,15 @@ async function startServer() {
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
   app.get("/api/platform/config.js", (_req, res) => {
     res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
+  });
+  app.get("/manus-routes.json", async (_req, res) => {
+    try {
+      const routesPath = path.resolve(process.cwd(), "public/manus-routes.json");
+      const routes = await readFile(routesPath, "utf8");
+      res.set("Cache-Control", "no-store").type("application/json").send(routes);
+    } catch {
+      res.status(404).json({ routes: [] });
+    }
   });
   registerOAuthRoutes(app);
   // tRPC API
