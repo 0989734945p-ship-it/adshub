@@ -50,6 +50,14 @@ export const appRouter = router({
       return { id: page.id, slug: page.slug, type: page.type, title: page.title, description: page.description, customCss: page.customCss, content: JSON.parse(page.contentJson), pixels: page.pixels.filter((pixel) => pixel.enabled).map((pixel) => ({ provider: pixel.provider, pixelId: pixel.pixelId })) };
     }),
   }),
+  campaigns: router({
+    list: protectedProcedure.query(async () => db.listCampaigns()),
+    setMode: protectedProcedure.input(z.object({ id: z.number().int().positive(), activeMode: z.enum(["human", "bot", "auto"]) })).mutation(async ({ input, ctx }) => {
+      if (!ctx.user || !["admin", "editor"].includes(ctx.user.role)) throw new Error("Editor access required");
+      await db.setCampaignMode(input.id, input.activeMode, ctx.user.id);
+      return { success: true } as const;
+    }),
+  }),
   tracking: router({
     savePixel: protectedProcedure.input(z.object({ landingPageId: z.number().int().positive(), provider: z.enum(["meta", "tiktok", "line"]), pixelId: z.string().trim().min(1).max(255), enabled: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
       if (!ctx.user || !["admin", "editor"].includes(ctx.user.role)) throw new Error("Editor access required");

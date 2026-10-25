@@ -47,9 +47,9 @@ export async function sendMetaEvent(pixelId: string, input: ConversionInput, acc
     },
     custom_data: { value: input.value, currency: input.currency, ...(input.properties ?? {}) },
   }];
-  const response = await fetch(`https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(accessToken)}`, {
+  const response = await fetch(`https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(pixelId)}/events`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ data }),
   });
   const body = await response.text();

@@ -43,7 +43,10 @@ async function startServer() {
   const server = createServer(app);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/health", async (_req, res) => {
+    const database = await db.checkDatabase();
+    res.status(database ? 200 : 503).json({ status: database ? "ok" : "degraded", database: database ? "ready" : "unavailable" });
+  });
   app.get("/api/platform/config.js", (_req, res) => res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript()));
   app.get("/manus-routes.json", async (_req, res) => {
     try { const routes = await readFile(path.resolve(process.cwd(), "public/manus-routes.json"), "utf8"); res.set("Cache-Control", "no-store").type("application/json").send(routes); }
@@ -53,6 +56,13 @@ async function startServer() {
     const page = renderLanding(await db.getLandingPageBySlug(req.params.slug));
     if (!page) { res.status(404).send("Landing page not found"); return; }
     res.set("Cache-Control", "public, max-age=60").type("html").send(page);
+  });
+  app.get(["/c/:slug", "/campaign/:slug"], async (req, res) => {
+    const resolved = await db.resolveCampaignPage(req.params.slug, req.headers["user-agent"] ?? "");
+    if (!resolved) { res.status(404).send("Campaign not found"); return; }
+    const rendered = renderLanding(resolved.page);
+    if (!rendered) { res.status(404).send("Campaign not found"); return; }
+    res.set("Cache-Control", "public, max-age=30").set("X-AdsHub-Campaign-Mode", resolved.resolvedMode).type("html").send(rendered);
   });
   app.post("/api/events", async (req, res) => {
     try {

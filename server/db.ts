@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Campaign,
@@ -26,6 +26,18 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function checkDatabase(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.execute(sql`select 1`);
+    return true;
+  } catch (error) {
+    console.warn("[Database] Readiness check failed:", error instanceof Error ? error.message : "unknown error");
+    return false;
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -114,6 +126,20 @@ export async function ensureSeedPages() {
   await db.insert(landingPages).values(defaultPages);
 }
 
+export async function ensureSeedCampaign() {
+  const db = await getDb();
+  if (!db) return;
+  await ensureSeedPages();
+  const existing = await db.select({ id: campaigns.id }).from(campaigns).limit(1);
+  if (existing.length > 0) return;
+  const pageRows = await db.select({ id: landingPages.id, slug: landingPages.slug }).from(landingPages).where(inArray(landingPages.slug, ["shop-main", "game-seo"]));
+  const pageIds = new Map(pageRows.map((page) => [page.slug, page.id]));
+  const humanPageId = pageIds.get("shop-main");
+  const botPageId = pageIds.get("game-seo");
+  if (!humanPageId || !botPageId) return;
+  await db.insert(campaigns).values({ name: "Main traffic router", slug: "main", humanPageId, botPageId, activeMode: "auto", status: "active" });
+}
+
 export async function upsertLandingPage(input: {
   id?: number; name: string; slug: string; type: "game" | "seo" | "selling"; status: "draft" | "live" | "paused"; title: string; description?: string; contentJson: string; customCss?: string; userId: number;
 }) {
@@ -162,5 +188,31 @@ export async function recordConversionEvent(input: { eventId: string; landingPag
 export async function listCampaigns(): Promise<Campaign[]> {
   const db = await getDb();
   if (!db) return [];
+  await ensureSeedCampaign();
   return db.select().from(campaigns).orderBy(desc(campaigns.updatedAt));
+}
+
+export async function getCampaignBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await ensureSeedCampaign();
+  const result = await db.select().from(campaigns).where(and(eq(campaigns.slug, slug), eq(campaigns.status, "active"))).limit(1);
+  return result[0];
+}
+
+export async function resolveCampaignPage(slug: string, userAgent = "") {
+  const campaign = await getCampaignBySlug(slug);
+  if (!campaign) return undefined;
+  const looksLikeBot = /bot|crawler|spider|slurp|facebookexternalhit|preview|headless/i.test(userAgent);
+  const pageId = campaign.activeMode === "bot" || (campaign.activeMode === "auto" && looksLikeBot) ? campaign.botPageId : campaign.humanPageId;
+  const page = await getLandingPageById(pageId);
+  if (!page || page.status !== "live") return undefined;
+  return { campaign, page, resolvedMode: pageId === campaign.botPageId ? "bot" as const : "human" as const };
+}
+
+export async function setCampaignMode(id: number, activeMode: "human" | "bot" | "auto", userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  void userId;
+  await db.update(campaigns).set({ activeMode, updatedAt: new Date() }).where(eq(campaigns.id, id));
 }
