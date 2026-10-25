@@ -1,28 +1,24 @@
 # AdsHub TODO
 
-## Dashboard shell and navigation
-- [ ] ระบบมีแผงจัดการภายในภาษาไทย พร้อมเมนู Landing Pages, Tracking Pixels, ทีม และ Settings
-- [ ] แดชบอร์ดแสดงสถานะรวมของหน้า จำนวน views, clicks, conversions และกิจกรรมล่าสุด
-- [ ] หน้าจอ responsive และมี active navigation ที่เห็นได้ชัด
+## Authentication and multi-level access
+- [ ] ผู้ดูแลและผู้ใช้ภายในเข้าสู่ระบบผ่าน Manus OAuth จริง พร้อม session cookie ที่ใช้ได้ใน embedded Preview และ published site
+- [ ] ระบบเก็บบัญชี OAuth ในฐานข้อมูล และรองรับ role `admin`, `editor`, `analyst`, `user`
+- [ ] Admin ดูรายชื่อบัญชีและเปลี่ยน role ได้; Editor แก้ไขหน้า/Pixel/Settings ได้; Analyst อ่านข้อมูลได้แต่แก้ไขไม่ได้
 
-## Authentication and team access
-- [ ] มีหน้า/ปุ่มเข้าสู่ระบบสำหรับผู้ดูแลและผู้ใช้ภายในผ่าน Manus OAuth จริง
-- [ ] แสดงชื่อ/สถานะผู้ใช้เมื่อเข้าสู่ระบบ และมีปุ่มออกจากระบบ
-- [ ] ผู้ดูแลมีพื้นที่สำหรับสร้าง แก้ไข และปิดใช้งานบัญชีทีมใน UI โดยไม่เปิดเผย credential หรือ token ใน frontend
+## Persistent landing pages and switching
+- [ ] ระบบบันทึก Landing Page ถาวรด้วยชื่อ slug ประเภท `game`, `seo`, `selling` สถานะ `draft`, `live`, `paused`, title, description, content และ Custom CSS
+- [ ] ระบบสร้าง/แก้ไขหน้าและ seed-safe initialization ไม่เขียนทับข้อมูลที่ผู้ใช้แก้แล้ว
+- [ ] Public route `/go/:slug` แสดงเฉพาะหน้า live และสลับหน้าเกม/SEO กับหน้าขายของผ่าน page/campaign configuration ได้จริง
+- [ ] หน้า public ฝัง Custom CSS และแสดง Meta Pixel, TikTok Pixel และ LINE tag ตามค่าของหน้านั้น
 
-## Landing page management
-- [ ] แสดงรายการ Landing Page พร้อมชื่อ slug ประเภท สถานะ และสถิติ
-- [ ] รองรับการสร้าง คัดลอก แก้ไข ลบ และสลับหน้าแต่ละรายการจากภายในระบบ
-- [ ] รองรับประเภทหน้าเกม/SEO และหน้าขายของ พร้อม preview Bot/Human ที่เปรียบเทียบได้
-- [ ] มีสถานะ draft, live และ paused และมีทางลัดสำหรับเปิดดู/แก้ไข/เผยแพร่
+## Pixel and Conversion API
+- [ ] ตั้งค่า Facebook Pixel ID, TikTok Pixel ID และ LINE tag ID แยกตาม Landing Page และเก็บถาวร
+- [ ] ตั้งค่า Meta CAPI token และ TikTok Events API token จากหน้า authenticated settings โดย token ไม่ถูกส่งกลับใน query หรือฝั่ง public browser
+- [ ] `/api/events` รับ event จาก public landing แล้วส่ง Meta CAPI `/events` และ TikTok Events API พร้อม `event_id`, timestamp, page URL และ match keys เมื่อมีข้อมูล
+- [ ] บันทึกสถานะ `sent`/`failed` และ response audit ของแต่ละ provider เพื่อ debug และรองรับ retry/deduplication
 
-## Tracking and customization
-- [ ] ตั้งค่า Facebook Pixel และ TikTok Pixel แยกตาม Landing Page พร้อม pixel ID และ events
-- [ ] ตั้งค่า Pixel API/Conversion API พร้อมโทเคนและข้อมูลเชื่อมต่อในพื้นที่ปลอดภัย
-- [ ] มีพื้นที่ custom CSS รายหน้าและ preview ก่อนเผยแพร่
-- [ ] จัดการข้อมูลแคมเปญ TikTok/Facebook และเชื่อมโยงกับหน้าที่เลือก
-
-## Delivery
-- [ ] มี `/manus-routes.json` ที่สะท้อน route จริงของแอป
-- [ ] ผ่าน typecheck/build และตรวจ readiness ของ dev server
-- [ ] เตรียม checkpoint ผ่าน Git หลังตรวจโค้ดเรียบร้อย
+## Production validation and delivery
+- [ ] migration ถูก commit และใช้ฐานข้อมูล managed MySQL เดียวกันตามข้อจำกัดของ WebDev
+- [ ] `/manus-routes.json` สะท้อน route dashboard และ public landing
+- [ ] ผ่าน `pnpm check`, `pnpm build`, migration และ HTTP readiness check โดยไม่เปิดเผย credential
+- [ ] สร้าง checkpoint หลังตรวจ source และสถานะ runtime เรียบร้อย

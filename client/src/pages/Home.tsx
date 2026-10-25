@@ -33,6 +33,7 @@ import {
 import { toast } from "sonner";
 import { startLogin } from "@/const";
 import { useAuth } from "../_core/hooks/useAuth";
+import { trpc } from "../lib/trpc";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -41,7 +42,7 @@ const navItems = [
   { id: "team", label: "ทีมงาน", icon: Users },
 ];
 
-const pages = [
+const seedPages = [
   {
     id: "sale",
     name: "หน้าขายของหลัก",
@@ -119,17 +120,39 @@ function MiniWindow({ mode }: { mode: "bot" | "human" }) {
 
 export default function Home() {
   const auth = useAuth();
+  const pagesQuery = trpc.pages.list.useQuery(undefined, { enabled: auth.isAuthenticated, retry: false });
+  const pageMutation = trpc.pages.upsert.useMutation({ onSuccess: () => pagesQuery.refetch() });
+  const pixelMutation = trpc.tracking.savePixel.useMutation({ onSuccess: () => toast.success("บันทึก Pixel ถาวรแล้ว") });
+  const settingsMutation = trpc.settings.save.useMutation({ onSuccess: () => { toast.success("บันทึกการตั้งค่า server-side แล้ว"); setModal(null); } });
   const [activeNav, setActiveNav] = useState("overview");
   const [activePage, setActivePage] = useState("sale");
   const [previewMode, setPreviewMode] = useState<"bot" | "human">("human");
   const [integrations, setIntegrations] = useState(baseIntegrations);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [modal, setModal] = useState<"css" | "pixel" | "team" | null>(null);
+  const [modal, setModal] = useState<"css" | "pixel" | "team" | "settings" | null>(null);
   const [cssValue, setCssValue] = useState(".hero-title { letter-spacing: -0.04em; }\n.cta-primary { border-radius: 14px; }");
+  const [pixelProvider, setPixelProvider] = useState<"meta" | "tiktok" | "line">("meta");
+  const [pixelValue, setPixelValue] = useState("");
+  const [facebookPixelId, setFacebookPixelId] = useState("");
+  const [lineTagId, setLineTagId] = useState("");
+  const [tiktokPixelId, setTiktokPixelId] = useState("");
+  const [tiktokApiToken, setTiktokApiToken] = useState("");
   const [newMember, setNewMember] = useState("");
   const [members, setMembers] = useState(["Narin S.", "May P.", "Tee K."]);
 
-  const selectedPage = useMemo(() => pages.find((page) => page.id === activePage) ?? pages[0], [activePage]);
+  const pages = useMemo(() => pagesQuery.data?.map((page) => ({
+    id: String(page.id),
+    name: page.name,
+    slug: `/go/${page.slug}`,
+    type: page.type === "selling" ? "Selling" : page.type === "game" ? "Game + SEO" : "SEO",
+    status: page.status[0].toUpperCase() + page.status.slice(1),
+    views: "—",
+    clicks: "—",
+    accent: page.type === "selling" ? "lime" : page.type === "game" ? "lilac" : "peach",
+    description: page.description || "Landing Page จากฐานข้อมูลจริง",
+  })) ?? seedPages, [pagesQuery.data]);
+  const selectedRawPage = pagesQuery.data?.find((page) => String(page.id) === activePage);
+  const selectedPage = useMemo(() => pages.find((page) => page.id === activePage) ?? pages[0], [activePage, pages]);
   const displayName = auth.user?.name || "Narin S.";
 
   const goTo = (id: string) => {
@@ -153,6 +176,25 @@ export default function Home() {
   const toggleIntegration = (name: string) => {
     setIntegrations((items) => items.map((item) => item.name === name ? { ...item, status: item.status === "Connected" ? "Needs review" : "Connected" } : item));
     toast.success(`${name} อัปเดตสถานะแล้ว`);
+  };
+
+  const savePage = () => {
+    if (!selectedRawPage || !auth.user) {
+      toast.info("เข้าสู่ระบบและเลือกหน้าในฐานข้อมูลก่อนบันทึก");
+      return;
+    }
+    pageMutation.mutate({ id: selectedRawPage.id, name: selectedRawPage.name, slug: selectedRawPage.slug, type: selectedRawPage.type, status: selectedRawPage.status, title: selectedRawPage.title, description: selectedRawPage.description ?? undefined, contentJson: JSON.stringify(selectedRawPage.content), customCss: cssValue });
+    setModal(null);
+  };
+
+  const savePixel = () => {
+    if (!selectedRawPage || !pixelValue.trim()) {
+      toast.error("กรุณาเลือกหน้าและกรอกรหัส Pixel");
+      return;
+    }
+    pixelMutation.mutate({ landingPageId: selectedRawPage.id, provider: pixelProvider, pixelId: pixelValue.trim(), enabled: true });
+    setModal(null);
+    setPixelValue("");
   };
 
   const addMember = () => {
@@ -255,12 +297,12 @@ export default function Home() {
           </section>
 
           <section className="section-block team-section" id="team-section"><div className="section-heading"><div><span className="section-label">TEAM ACCESS</span><h2>ทีมที่ดูแล workspace นี้</h2><p>กำหนดสิทธิ์การเข้าถึง editor, pixel และสถิติ</p></div><button className="black-button" onClick={() => setModal("team")}><Plus size={15} /> เพิ่มสมาชิก</button></div><div className="team-list">{members.map((member, index) => <div className="team-row" key={member}><div className="avatar">{member.split(" ").map((part) => part[0]).join("").slice(0, 2)}</div><div><b>{member}</b><small>{index === 0 ? "เจ้าของ workspace" : "Editor · Tracking"}</small></div><span className="team-access">{index === 0 ? "Owner" : "Editor"}</span><MoreHorizontal size={16} /></div>)}</div></section>
-          <section id="settings-section" className="settings-anchor"><Code2 size={16} /> Custom CSS, route rules และ campaign settings อยู่ใน editor ของแต่ละหน้า</section>
+          <button id="settings-section" className="settings-anchor" onClick={() => setModal("settings")}><Code2 size={16} /> ตั้งค่า Pixel, TikTok API และ Custom CSS <ArrowUpRight size={14} /></button>
           <footer className="footer-note"><span>ADSHUB / INTERNAL CONTROL ROOM</span><span>Privacy first · Built for focused campaigns</span></footer>
         </div>
       </main>
 
-      {modal && <div className="modal-backdrop" onClick={() => setModal(null)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setModal(null)}><X size={17} /></button>{modal === "css" && <><span className="section-label">PAGE EDITOR</span><h2>แก้ไข {selectedPage.name}</h2><p className="modal-copy">ปรับ custom CSS และเลือกหน้า routing ที่ต้องการใช้ ระบบจะ preview ก่อนเผยแพร่จริง</p><label>Custom CSS<textarea value={cssValue} onChange={(event) => setCssValue(event.target.value)} /></label><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={() => { setModal(null); toast.success("บันทึกหน้าแบบร่างแล้ว"); }}>บันทึกแบบร่าง <Check size={15} /></button></div></>}{modal === "pixel" && <><span className="section-label">TRACKING CENTER</span><h2>เชื่อมต่อ Pixel</h2><p className="modal-copy">ตั้งค่ารหัสสำหรับ {selectedPage.name} แยกได้จากหน้าอื่น</p><label>Platform<select defaultValue="Meta Pixel"><option>Meta Pixel</option><option>TikTok Pixel</option><option>Conversion API</option></select></label><label>Pixel ID / Access Token<input placeholder="วางรหัสในช่องนี้" /></label><div className="warning-note"><ShieldCheck size={16} /> ค่าลับจะถูกเก็บฝั่ง server และไม่ถูกแสดงใน public page</div><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={() => { setModal(null); toast.success("บันทึก tracking integration แล้ว"); }}>เชื่อมต่อ <ArrowUpRight size={15} /></button></div></>}{modal === "team" && <><span className="section-label">TEAM ACCESS</span><h2>เพิ่มสมาชิกทีม</h2><p className="modal-copy">ส่งคำเชิญให้ทีมเข้ามาช่วยแก้ไขหน้าและดูสถิติ</p><label>ชื่อหรืออีเมล<input value={newMember} onChange={(event) => setNewMember(event.target.value)} placeholder="เช่น pat@company.com" /></label><label>สิทธิ์<select defaultValue="Editor"><option>Editor</option><option>Analyst</option><option>Admin</option></select></label><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={() => { addMember(); setModal(null); }}>เพิ่มสมาชิก <Plus size={15} /></button></div></>}</div></div>}
+      {modal && <div className="modal-backdrop" onClick={() => setModal(null)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setModal(null)}><X size={17} /></button>{modal === "css" && <><span className="section-label">PAGE EDITOR</span><h2>แก้ไข {selectedPage.name}</h2><p className="modal-copy">ปรับ custom CSS และเลือกหน้า routing ที่ต้องการใช้ ระบบจะ preview ก่อนเผยแพร่จริง</p><label>Custom CSS<textarea value={cssValue} onChange={(event) => setCssValue(event.target.value)} /></label><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={savePage}>บันทึกแบบร่าง <Check size={15} /></button></div></>}{modal === "pixel" && <><span className="section-label">TRACKING CENTER</span><h2>เชื่อมต่อ Pixel</h2><p className="modal-copy">ตั้งค่ารหัสสำหรับ {selectedPage.name} แยกได้จากหน้าอื่น</p><label>Platform<select value={pixelProvider} onChange={(event) => setPixelProvider(event.target.value as "meta" | "tiktok" | "line")}><option value="meta">Meta Pixel</option><option value="tiktok">TikTok Pixel</option><option value="line">LINE tag</option></select></label><label>Pixel ID / Tag ID<input value={pixelValue} onChange={(event) => setPixelValue(event.target.value)} placeholder="วางรหัสในช่องนี้" /></label><div className="warning-note"><ShieldCheck size={16} /> ค่าลับจะถูกเก็บฝั่ง server และไม่ถูกแสดงใน public page</div><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={savePixel}>เชื่อมต่อ <ArrowUpRight size={15} /></button></div></>}{modal === "team" && <><span className="section-label">TEAM ACCESS</span><h2>เพิ่มสมาชิกทีม</h2><p className="modal-copy">ส่งคำเชิญให้ทีมเข้ามาช่วยแก้ไขหน้าและดูสถิติ</p><label>ชื่อหรืออีเมล<input value={newMember} onChange={(event) => setNewMember(event.target.value)} placeholder="เช่น pat@company.com" /></label><label>สิทธิ์<select defaultValue="Editor"><option>Editor</option><option>Analyst</option><option>Admin</option></select></label><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={() => { addMember(); setModal(null); }}>เพิ่มสมาชิก <Plus size={15} /></button></div></>}{modal === "settings" && <><span className="section-label">WORKSPACE SETTINGS</span><h2>Pixel, API และ Custom CSS</h2><p className="modal-copy">ค่าที่กรอกจะถูกเก็บฝั่ง server และ token จะไม่ถูกส่งกลับไปที่หน้า public</p><label>รหัสพิกเซลของ Facebook<input value={facebookPixelId} onChange={(event) => setFacebookPixelId(event.target.value)} placeholder="Facebook Pixel ID" /></label><label>แท็ก LINE / รหัสพิกเซล<input value={lineTagId} onChange={(event) => setLineTagId(event.target.value)} placeholder="LINE tag ID" /></label><label>รหัสพิกเซลของ TikTok<input value={tiktokPixelId} onChange={(event) => setTiktokPixelId(event.target.value)} placeholder="TikTok Pixel ID" /></label><label>การเข้าถึง API สำหรับกิจกรรม TikTok / โทเค็น<input type="password" value={tiktokApiToken} onChange={(event) => setTiktokApiToken(event.target.value)} placeholder="วาง token เฉพาะฝั่ง server" /></label><label>Custom CSS<textarea value={cssValue} onChange={(event) => setCssValue(event.target.value)} /></label><div className="modal-row"><button className="ghost-button" onClick={() => setModal(null)}>ยกเลิก</button><button className="black-button" onClick={() => settingsMutation.mutate({ facebookPixelId, lineTagId, tiktokPixelId, tiktokApiToken, customCss: cssValue })}>บันทึก Settings <Check size={15} /></button></div></>}{/* end settings */}</div></div>}
     </div>
   );
 }

@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"AdsHub dashboard"},{"path":"/pages","title":"Landing Pages"},{"path":"/pixels","title":"Tracking Pixels"},{"path":"/team","title":"Team"},{"path":"/settings","title":"Settings"},{"path":"/404","title":"Not found"}]}
+{"routes":[{"path":"/","title":"AdsHub dashboard"},{"path":"/pages","title":"Landing Pages"},{"path":"/pixels","title":"Tracking Pixels"},{"path":"/team","title":"Team"},{"path":"/settings","title":"Settings"},{"path":"/go/:slug","title":"Public campaign landing"},{"path":"/404","title":"Not found"}]}
